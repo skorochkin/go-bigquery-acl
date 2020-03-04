@@ -22,24 +22,16 @@ func updateAccessControl(client *bigquery.Client, conf Config) error {
 		generateAccesses(metaToUpdate, dataset.Owner.GroupByEmail, bigquery.OwnerRole, bigquery.GroupEmailEntity)
 		generateAccesses(metaToUpdate, dataset.Owner.UserByEmail, bigquery.OwnerRole, bigquery.UserEmailEntity)
 		generateAccesses(metaToUpdate, dataset.Owner.SpecialGroup, bigquery.OwnerRole, bigquery.SpecialGroupEntity)
+
 		generateAccesses(metaToUpdate, dataset.Writer.GroupByEmail, bigquery.WriterRole, bigquery.GroupEmailEntity)
 		generateAccesses(metaToUpdate, dataset.Writer.UserByEmail, bigquery.WriterRole, bigquery.UserEmailEntity)
 		generateAccesses(metaToUpdate, dataset.Writer.SpecialGroup, bigquery.WriterRole, bigquery.SpecialGroupEntity)
+
 		generateAccesses(metaToUpdate, dataset.Reader.GroupByEmail, bigquery.ReaderRole, bigquery.GroupEmailEntity)
 		generateAccesses(metaToUpdate, dataset.Reader.UserByEmail, bigquery.ReaderRole, bigquery.UserEmailEntity)
 		generateAccesses(metaToUpdate, dataset.Reader.SpecialGroup, bigquery.ReaderRole, bigquery.SpecialGroupEntity)
 
-		// TODO: Factorize with above
-		for _, view := range dataset.View {
-			metaToUpdate.Access = append(metaToUpdate.Access, &bigquery.AccessEntry{
-				EntityType: bigquery.ViewEntity,
-				View: &bigquery.Table{
-					ProjectID: conf.Project,
-					DatasetID: view.DatasetID,
-					TableID:   view.ViewID,
-				},
-			})
-		}
+		generateViews(metaToUpdate, dataset.View, conf.Project)
 
 		ds := client.Dataset(dataset.Name)
 		ctx := context.Background()
@@ -51,10 +43,14 @@ func updateAccessControl(client *bigquery.Client, conf Config) error {
 		// Print the diff
 		isDiff := diff(AccessList(meta.Access), AccessList(metaToUpdate.Access))
 
-		// Update access
-		if isDiff {
-			if _, err := ds.Update(ctx, *metaToUpdate, meta.ETag); err != nil {
-				return errors.Wrap(err, "cannot update original dataset's metadata")
+		if planMode {
+			fmt.Println(ansi.Color(fmt.Sprintf("\n\nSkipping update since planMode is set."), "blue+b"))
+		} else {
+			// Update access
+			if isDiff {
+				if _, err := ds.Update(ctx, *metaToUpdate, meta.ETag); err != nil {
+					return errors.Wrap(err, "cannot update original dataset's metadata")
+				}
 			}
 		}
 	}
@@ -71,6 +67,21 @@ func generateAccesses(meta *bigquery.DatasetMetadataToUpdate, entities []string,
 			Role:       role,
 			EntityType: entityType,
 			Entity:     entity,
+		})
+	}
+}
+
+// generateViews update the AccessEntries for a given bigquery.DatasetMetadataToUpdate
+func generateViews(meta *bigquery.DatasetMetadataToUpdate, views []View, project string) {
+
+	for _, view := range views {
+		meta.Access = append(meta.Access, &bigquery.AccessEntry{
+			EntityType: bigquery.ViewEntity,
+			View: &bigquery.Table{
+				ProjectID: project,
+				DatasetID: view.DatasetID,
+				TableID:   view.ViewID,
+			},
 		})
 	}
 }

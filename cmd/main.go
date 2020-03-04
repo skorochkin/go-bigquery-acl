@@ -6,7 +6,6 @@ import (
 	"os"
 
 	"fmt"
-	"os/user"
 	"time"
 
 	"cloud.google.com/go/bigquery"
@@ -17,27 +16,24 @@ import (
 var (
 	confPath string
 	statusOK = true
+	planMode bool
 )
 
 func init() {
 
 	// Parse flags
 	flag.StringVar(&confPath, "conf", "configs/config.yaml", "The path of the configuration file")
+	flag.BoolVar(&planMode, "plan", false, "Plan mode")
 	flag.Parse()
 
 	// Print information on current update
 	fmt.Println(ansi.Color("BigQuery update information", "yellow+b"))
 
+	// Print plan mode status
+	fmt.Println(fmt.Sprintf("  Plan mode:            %t", planMode))
+
 	// Print creation date
 	fmt.Println(fmt.Sprintf("  Created at:           %s", time.Now().UTC()))
-
-	// Print current username
-	currentUser, err := user.Current()
-	if err != nil {
-		fmt.Println(errors.Wrap(err, "cannot get current user"), "red")
-	} else {
-		fmt.Println(fmt.Sprintf("  Author:               %s", currentUser.Username))
-	}
 
 	// Print GCP credentials file
 	credEnv, ok := os.LookupEnv("GOOGLE_APPLICATION_CREDENTIALS")
@@ -70,9 +66,14 @@ func main() {
 	fmt.Println(ansi.Color("\n\nBigQuery update result", "yellow+b"))
 
 	if statusOK {
-		fmt.Println("  Status:               " + ansi.Color("success", "green"))
+		if planMode {
+			fmt.Println("  Status:               " + ansi.Color("plan_only", "blue"))
+		} else {
+			fmt.Println("  Status:               " + ansi.Color("success", "green"))
+		}
 	} else {
 		fmt.Println("  Status:               " + ansi.Color("failure", "red"))
+		os.Exit(1)
 	}
 }
 
@@ -81,17 +82,17 @@ func run() error {
 	var conf Config
 	err := conf.LoadFromFile(confPath)
 	if err != nil {
-		return errors.Wrap(err, "cannot load configuration")
+		return errors.Wrap(err, "\ncannot load configuration")
 	}
 
 	client, err := bigquery.NewClient(context.Background(), conf.Project)
 	if err != nil {
-		return errors.Wrap(err, "cannot create client")
+		return errors.Wrap(err, "\ncannot create client")
 	}
 
 	err = updateAccessControl(client, conf)
 	if err != nil {
-		return errors.Wrap(err, "cannot update accesses")
+		return errors.Wrap(err, "\ncannot update accesses")
 	}
 
 	return nil

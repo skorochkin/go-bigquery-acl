@@ -14,7 +14,11 @@ func (a AccessList) Len() int {
 }
 
 func (a AccessList) Less(i, j int) bool {
-	return a[i].Entity < a[j].Entity
+	if a[i].EntityType == bigquery.ViewEntity && a[j].EntityType == bigquery.ViewEntity {
+		return a[i].View.TableID < a[j].View.TableID
+	} else {
+		return a[i].Entity < a[j].Entity
+	}
 }
 
 func (a AccessList) Swap(i, j int) {
@@ -25,7 +29,11 @@ func (a AccessList) Swap(i, j int) {
 func (a AccessList) Entries() []string {
 	var result []string
 	for _, entry := range a {
-		result = append(result, fmt.Sprintf("%s:%s\n", entry.Entity, entry.Role))
+		if entry.EntityType == bigquery.ViewEntity {
+			result = append(result, fmt.Sprintf("%s:%s:%s\n", entry.View.ProjectID, entry.View.DatasetID, entry.View.TableID))
+		} else {
+			result = append(result, fmt.Sprintf("%s:%s\n", entry.Entity, entry.Role))
+		}
 	}
 	return result
 }
